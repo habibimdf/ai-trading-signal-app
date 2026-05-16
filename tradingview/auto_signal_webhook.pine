@@ -1,0 +1,87 @@
+//@version=5
+indicator("AI Trading Signal Webhook", overlay=true)
+
+modeInput = input.string("swing", "Mode", options=["swing", "scalping"])
+pairInput = input.string("AUTO", "Pair Override", options=["AUTO", "EUR_USD", "GBP_USD", "XAU_USD", "USD_JPY", "BTC_USDT"])
+accountTypeInput = input.string("USD", "Account Type", options=["USD", "USC"])
+balanceInput = input.float(1000, "Balance", minval=0.01)
+riskPercentInput = input.float(1.0, "Risk Percent", minval=0.01, maxval=10)
+sendWaitInput = input.bool(true, "Send WAIT Alerts")
+secretInput = input.string("", "Webhook Secret")
+
+analysisTf = modeInput == "swing" ? "240" : "15"
+executionTf = modeInput == "swing" ? "60" : "5"
+analysisLabel = modeInput == "swing" ? "H4" : "M15"
+executionLabel = modeInput == "swing" ? "H1" : "M5"
+payloadPair = pairInput == "AUTO" ? syminfo.ticker : pairInput
+
+analysisClose = request.security(syminfo.tickerid, analysisTf, close)
+analysisEma50 = request.security(syminfo.tickerid, analysisTf, ta.ema(close, 50))
+analysisEma200 = request.security(syminfo.tickerid, analysisTf, ta.ema(close, 200))
+analysisRsi = request.security(syminfo.tickerid, analysisTf, ta.rsi(close, 14))
+
+executionClose = request.security(syminfo.tickerid, executionTf, close)
+executionPrevClose = request.security(syminfo.tickerid, executionTf, close[1])
+executionEma50 = request.security(syminfo.tickerid, executionTf, ta.ema(close, 50))
+executionRsi = request.security(syminfo.tickerid, executionTf, ta.rsi(close, 14))
+executionAtr = request.security(syminfo.tickerid, executionTf, ta.atr(14))
+
+bullishBias = analysisClose > analysisEma200 and analysisEma50 > analysisEma200 and analysisRsi >= 55
+bearishBias = analysisClose < analysisEma200 and analysisEma50 < analysisEma200 and analysisRsi <= 45
+bullishConfirmation = executionClose > executionEma50 and executionClose > executionPrevClose and executionRsi > 50
+bearishConfirmation = executionClose < executionEma50 and executionClose < executionPrevClose and executionRsi < 50
+
+signal = bullishBias and bullishConfirmation ? "BUY" : bearishBias and bearishConfirmation ? "SELL" : "WAIT"
+analysisBias = bullishBias ? "BULLISH" : bearishBias ? "BEARISH" : "SIDEWAYS"
+executionConfirmation = bullishConfirmation ? "BULLISH_CONFIRMATION" : bearishConfirmation ? "BEARISH_CONFIRMATION" : "NONE"
+
+biasScore = bullishBias or bearishBias ? 55 : 25
+confirmationScore = bullishConfirmation or bearishConfirmation ? 35 : 0
+confidence = math.min(100, biasScore + confirmationScore)
+
+slMultiplier = modeInput == "swing" ? 1.4 : 1.1
+stopLoss = signal == "BUY" ? executionClose - executionAtr * slMultiplier : signal == "SELL" ? executionClose + executionAtr * slMultiplier : na
+risk = math.abs(executionClose - stopLoss)
+tp1 = signal == "BUY" ? executionClose + risk * 1.5 : signal == "SELL" ? executionClose - risk * 1.5 : na
+tp2 = signal == "BUY" ? executionClose + risk * 2.0 : signal == "SELL" ? executionClose - risk * 2.0 : na
+tp3 = signal == "BUY" ? executionClose + risk * 3.0 : signal == "SELL" ? executionClose - risk * 3.0 : na
+
+num(value) =>
+    na(value) ? "null" : str.tostring(value, format.mintick)
+
+payload = "{" +
+  "\"secret\":\"" + secretInput + "\"," +
+  "\"pair\":\"" + payloadPair + "\"," +
+  "\"ticker\":\"" + syminfo.ticker + "\"," +
+  "\"exchange\":\"" + syminfo.prefix + "\"," +
+  "\"mode\":\"" + modeInput + "\"," +
+  "\"analysis_timeframe\":\"" + analysisLabel + "\"," +
+  "\"execution_timeframe\":\"" + executionLabel + "\"," +
+  "\"analysis_bias\":\"" + analysisBias + "\"," +
+  "\"execution_confirmation\":\"" + executionConfirmation + "\"," +
+  "\"signal\":\"" + signal + "\"," +
+  "\"confidence\":" + str.tostring(confidence) + "," +
+  "\"analysis_close\":" + num(analysisClose) + "," +
+  "\"analysis_ema50\":" + num(analysisEma50) + "," +
+  "\"analysis_ema200\":" + num(analysisEma200) + "," +
+  "\"analysis_rsi\":" + num(analysisRsi) + "," +
+  "\"execution_close\":" + num(executionClose) + "," +
+  "\"execution_ema50\":" + num(executionEma50) + "," +
+  "\"execution_rsi\":" + num(executionRsi) + "," +
+  "\"execution_atr\":" + num(executionAtr) + "," +
+  "\"price\":" + num(executionClose) + "," +
+  "\"stop_loss\":" + num(stopLoss) + "," +
+  "\"tp1\":" + num(tp1) + "," +
+  "\"tp2\":" + num(tp2) + "," +
+  "\"tp3\":" + num(tp3) + "," +
+  "\"balance\":" + str.tostring(balanceInput) + "," +
+  "\"account_type\":\"" + accountTypeInput + "\"," +
+  "\"risk_percent\":" + str.tostring(riskPercentInput) + "," +
+  "\"timeframe\":\"" + timeframe.period + "\"," +
+  "\"time\":\"" + str.tostring(time) + "\"," +
+  "\"note\":\"Auto recommendation from TradingView Pine Script\"" +
+  "}"
+
+shouldSend = barstate.isconfirmed and (signal != "WAIT" or sendWaitInput)
+if shouldSend
+    alert(payload, alert.freq_once_per_bar_close)

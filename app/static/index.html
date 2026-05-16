@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Trading Signal Assistant</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">TV</div>
+          <div>
+            <h1>Signal Assistant</h1>
+            <p>TradingView webhook</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>TradingView Template</h2>
+          <label>Pair</label>
+          <select id="pair">
+            <option value="EUR_USD">EUR/USD</option>
+            <option value="GBP_USD">GBP/USD</option>
+            <option value="XAU_USD" selected>XAU/USD</option>
+            <option value="USD_JPY">USD/JPY</option>
+            <option value="BTC_USDT">BTC/USDT</option>
+          </select>
+
+          <label>Mode</label>
+          <select id="mode">
+            <option value="swing" selected>Swing - H4 analisis / H1 eksekusi</option>
+            <option value="scalping">Scalping - M15 analisis / M5 eksekusi</option>
+          </select>
+
+          <label>Sinyal</label>
+          <input value="AUTO - BUY / SELL / WAIT" readonly />
+
+          <label>Modal</label>
+          <input id="balance" type="number" value="1000" min="1" step="1" />
+
+          <label>Tipe Akun</label>
+          <select id="accountType">
+            <option value="USD" selected>USD</option>
+            <option value="USC">USC / Cent</option>
+          </select>
+
+          <label>Risk (%)</label>
+          <input id="riskPercent" type="number" value="1" min="0.01" max="10" step="0.1" />
+
+          <label>Webhook Endpoint</label>
+          <input value="/webhook/tradingview" readonly />
+
+          <details class="template-box">
+            <summary>Alert Message JSON</summary>
+            <textarea id="webhookTemplate" readonly rows="12"></textarea>
+          </details>
+        </div>
+
+        <div class="panel">
+          <h2>Kirim Alert</h2>
+          <label>Channel</label>
+          <select id="channel">
+            <option value="telegram" selected>Telegram</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="both">Telegram + WhatsApp</option>
+          </select>
+          <button id="sendBtn" class="secondary" disabled>Kirim Sinyal Terakhir</button>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h2>TradingView Signals</h2>
+          </div>
+          <div class="top-status">
+            <div class="status live" id="liveStatus">Live: connecting</div>
+            <div class="status" id="providerStatus">Loading...</div>
+          </div>
+        </header>
+
+        <section class="cards">
+          <div class="card signal-card" id="currentSignal">
+            <p class="eyebrow">Sinyal Terakhir</p>
+            <h3>Belum ada sinyal</h3>
+            <p>Menunggu alert dari TradingView.</p>
+          </div>
+          <div class="card">
+            <p class="eyebrow">Source</p>
+            <h3>Webhook</h3>
+            <p>Data masuk dari TradingView alert.</p>
+          </div>
+          <div class="card">
+            <p class="eyebrow">AI Reasoning</p>
+            <h3 id="aiStatus">Optional</h3>
+            <p id="aiDetail">Aktif jika ENABLE_AI_REASONING=true.</p>
+          </div>
+          <div class="card">
+            <p class="eyebrow">Live Update</p>
+            <h3 id="pollStatus">Auto-refresh</h3>
+            <p id="pollDetail">Dashboard mengecek sinyal baru setiap 5 detik.</p>
+          </div>
+        </section>
+
+        <section class="chart-grid">
+          <div class="card chart-card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">TradingView Chart</p>
+                <h3 id="chartTitle">XAU/USD</h3>
+              </div>
+              <span id="chartMeta">Execution chart</span>
+            </div>
+            <div id="tradingviewChart" class="tradingview-chart"></div>
+          </div>
+        </section>
+
+        <section class="grid">
+          <div class="card large">
+            <div class="card-header">
+              <h3>Detail Sinyal</h3>
+              <span id="lastUpdated">-</span>
+            </div>
+            <pre id="signalDetail">Belum ada data.</pre>
+          </div>
+
+          <div class="card large">
+            <div class="card-header">
+              <h3>Riwayat</h3>
+              <div class="header-actions">
+                <button id="refreshBtn" class="mini">Refresh</button>
+                <button id="clearHistoryBtn" class="mini danger">Bersihkan</button>
+              </div>
+            </div>
+            <div id="history" class="history"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
