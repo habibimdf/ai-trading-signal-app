@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from typing import Optional
+
 from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
@@ -15,17 +17,17 @@ class Signal(Base):
     signal: Mapped[str] = mapped_column(String(10), default="WAIT")
     status: Mapped[str] = mapped_column(String(30), default="NEW")
 
-    entry_min: Mapped[float | None] = mapped_column(Float, nullable=True)
-    entry_max: Mapped[float | None] = mapped_column(Float, nullable=True)
-    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
-    take_profit_1: Mapped[float | None] = mapped_column(Float, nullable=True)
-    take_profit_2: Mapped[float | None] = mapped_column(Float, nullable=True)
-    take_profit_3: Mapped[float | None] = mapped_column(Float, nullable=True)
+    entry_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    stop_loss: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    take_profit_1: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    take_profit_2: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    take_profit_3: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    risk_reward: Mapped[float | None] = mapped_column(Float, nullable=True)
+    risk_reward: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     confidence: Mapped[int] = mapped_column(Integer, default=0)
-    lot_size: Mapped[float | None] = mapped_column(Float, nullable=True)
-    risk_amount_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lot_size: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    risk_amount_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     account_type: Mapped[str] = mapped_column(String(10), default="USD")
     balance: Mapped[float] = mapped_column(Float, default=0)
     risk_percent: Mapped[float] = mapped_column(Float, default=1)
