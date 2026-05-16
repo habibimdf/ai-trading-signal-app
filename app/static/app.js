@@ -223,7 +223,7 @@ async function loadHealth() {
     $("providerStatus").textContent = `Provider: ${data.provider}`;
     $("aiStatus").textContent = data.ai_reasoning_enabled ? "Active" : "Off";
     $("aiDetail").textContent = data.ai_reasoning_enabled
-      ? `Model: ${data.ai_model}`
+      ? `Provider: ${data.ai_provider || "ai"} - Model: ${data.ai_model}`
       : "Reasoning AI belum aktif.";
   } catch (err) {
     $("providerStatus").textContent = "Provider: offline";

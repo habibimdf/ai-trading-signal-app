@@ -56,12 +56,15 @@ def index():
 
 @app.get("/api/health")
 def health():
+    ai_provider = settings.ai_provider.lower().strip()
+    ai_model = settings.gemini_model if ai_provider == "gemini" else settings.openai_model
     return {
         "ok": True,
         "app": settings.app_name,
         "provider": settings.data_provider,
         "ai_reasoning_enabled": settings.enable_ai_reasoning,
-        "ai_model": settings.openai_model if settings.enable_ai_reasoning else None,
+        "ai_provider": ai_provider if settings.enable_ai_reasoning else None,
+        "ai_model": ai_model if settings.enable_ai_reasoning else None,
         "time": datetime.now(timezone.utc).isoformat(),
     }
 

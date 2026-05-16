@@ -89,9 +89,18 @@ Cara pakai:
    - `Balance`: modal
    - `Risk Percent`: risiko per sinyal
    - `Send WAIT Alerts`: default aktif untuk test webhook
+   - `Webhook Secret`: isi sama dengan `TRADINGVIEW_WEBHOOK_SECRET` di Vercel, atau kosongkan dua-duanya
 6. Buat alert.
 7. Pada condition, pilih script `AI Trading Signal Webhook`, lalu pilih `Any alert() function call`.
 8. Isi Webhook URL ke endpoint aplikasi.
+
+Untuk test otomatis yang lebih sering:
+
+1. Buka chart timeframe `1m`.
+2. Set input script `Mode` ke `scalping`.
+3. Aktifkan `Send WAIT Alerts`.
+4. Buat alert dengan condition `AI Trading Signal Webhook` -> `Any alert() function call`.
+5. Alert akan dikirim saat candle close, jadi pada chart `1m` tunggu sekitar 1 menit.
 
 Endpoint lokal:
 
@@ -195,10 +204,14 @@ Aktifkan di `.env`:
 
 ```env
 ENABLE_AI_REASONING=true
-OPENAI_API_KEY="ISI_API_KEY_ANDA"
-OPENAI_MODEL="gpt-5.2"
-OPENAI_BASE_URL="https://api.openai.com/v1"
+AI_PROVIDER="gemini"
+GEMINI_API_KEY="ISI_API_KEY_GEMINI_ANDA"
+GEMINI_MODEL="gemini-3-flash-preview"
+GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
+GEMINI_THINKING_LEVEL="low"
 ```
+
+`GEMINI_MODEL` default memakai `gemini-3-flash-preview`, model Gemini 3 Flash untuk Gemini API.
 
 Jika AI gagal, webhook tetap diterima dan Telegram tetap dikirim dengan reasoning TradingView biasa.
 
@@ -360,9 +373,11 @@ APP_ENV=production
 DATA_PROVIDER=tradingview
 ENABLE_SCHEDULER=false
 ENABLE_AI_REASONING=false
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.2
-OPENAI_BASE_URL=https://api.openai.com/v1
+AI_PROVIDER=gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_THINKING_LEVEL=low
 TELEGRAM_BOT_TOKEN=isi_token_bot
 TELEGRAM_CHAT_ID=isi_chat_id
 TRADINGVIEW_WEBHOOK_SECRET=secret-kamu

@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     tradingview_webhook_secret: str = ""
 
     enable_ai_reasoning: bool = False
+    ai_provider: str = "gemini"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3-flash-preview"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_thinking_level: str = "low"
+
+    # Legacy OpenAI settings. Set AI_PROVIDER=openai to use these.
     openai_api_key: str = ""
     openai_model: str = "gpt-5.2"
     openai_base_url: str = "https://api.openai.com/v1"

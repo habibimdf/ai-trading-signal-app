@@ -13,7 +13,7 @@ class AIReasoningError(RuntimeError):
     pass
 
 
-def _extract_response_text(data: dict[str, Any]) -> str:
+def _extract_openai_response_text(data: dict[str, Any]) -> str:
     output_text = data.get("output_text")
     if isinstance(output_text, str) and output_text.strip():
         return output_text.strip()
@@ -26,6 +26,23 @@ def _extract_response_text(data: dict[str, Any]) -> str:
             if not isinstance(content, dict):
                 continue
             text = content.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+    return "\n".join(parts).strip()
+
+
+def _extract_gemini_response_text(data: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for candidate in data.get("candidates", []):
+        if not isinstance(candidate, dict):
+            continue
+        content = candidate.get("content")
+        if not isinstance(content, dict):
+            continue
+        for part in content.get("parts", []):
+            if not isinstance(part, dict):
+                continue
+            text = part.get("text")
             if isinstance(text, str) and text.strip():
                 parts.append(text.strip())
     return "\n".join(parts).strip()
@@ -98,9 +115,62 @@ def build_ai_prompt(signal: Signal, raw: dict[str, Any]) -> str:
     )
 
 
-async def generate_ai_reasoning(settings: Settings, signal: Signal, raw: dict[str, Any]) -> str:
-    if not settings.enable_ai_reasoning:
-        return ""
+def _system_instruction() -> str:
+    return (
+        "Anda adalah analis risiko trading yang konservatif. "
+        "Tugas Anda hanya memberi reasoning tambahan, bukan keputusan final atau nasihat keuangan."
+    )
+
+
+async def _generate_gemini_reasoning(settings: Settings, signal: Signal, raw: dict[str, Any]) -> str:
+    if not settings.gemini_api_key:
+        raise AIReasoningError("GEMINI_API_KEY belum diisi.")
+
+    model = settings.gemini_model.strip().removeprefix("models/")
+    url = f"{settings.gemini_base_url.rstrip('/')}/models/{model}:generateContent"
+    thinking_level = settings.gemini_thinking_level.strip().lower() or "low"
+    payload = {
+        "system_instruction": {"parts": [{"text": _system_instruction()}]},
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": build_ai_prompt(signal, raw),
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "maxOutputTokens": 900,
+            "thinkingConfig": {
+                "thinkingLevel": thinking_level,
+            },
+        },
+    }
+    headers = {
+        "x-goog-api-key": settings.gemini_api_key,
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(url, headers=headers, json=payload)
+
+    if response.status_code >= 300:
+        raise AIReasoningError(f"Gemini error {response.status_code}: {response.text[:300]}")
+
+    data = response.json()
+    text = _extract_gemini_response_text(data)
+    if not text:
+        finish_reason = None
+        candidates = data.get("candidates") or []
+        if candidates and isinstance(candidates[0], dict):
+            finish_reason = candidates[0].get("finishReason")
+        detail = f" Finish reason: {finish_reason}." if finish_reason else ""
+        raise AIReasoningError(f"Gemini tidak mengembalikan teks reasoning.{detail}")
+    return text[:1800]
+
+
+async def _generate_openai_reasoning(settings: Settings, signal: Signal, raw: dict[str, Any]) -> str:
     if not settings.openai_api_key:
         raise AIReasoningError("OPENAI_API_KEY belum diisi.")
 
@@ -112,10 +182,7 @@ async def generate_ai_reasoning(settings: Settings, signal: Signal, raw: dict[st
     payload = {
         "model": settings.openai_model,
         "store": False,
-        "instructions": (
-            "Anda adalah analis risiko trading yang konservatif. "
-            "Tugas Anda hanya memberi reasoning tambahan, bukan keputusan final atau nasihat keuangan."
-        ),
+        "instructions": _system_instruction(),
         "input": build_ai_prompt(signal, raw),
     }
 
@@ -125,7 +192,19 @@ async def generate_ai_reasoning(settings: Settings, signal: Signal, raw: dict[st
     if response.status_code >= 300:
         raise AIReasoningError(f"OpenAI error {response.status_code}: {response.text[:300]}")
 
-    text = _extract_response_text(response.json())
+    text = _extract_openai_response_text(response.json())
     if not text:
         raise AIReasoningError("OpenAI tidak mengembalikan teks reasoning.")
     return text[:1800]
+
+
+async def generate_ai_reasoning(settings: Settings, signal: Signal, raw: dict[str, Any]) -> str:
+    if not settings.enable_ai_reasoning:
+        return ""
+
+    provider = settings.ai_provider.lower().strip()
+    if provider == "gemini":
+        return await _generate_gemini_reasoning(settings, signal, raw)
+    if provider == "openai":
+        return await _generate_openai_reasoning(settings, signal, raw)
+    raise AIReasoningError(f"AI_PROVIDER tidak didukung: {settings.ai_provider}")
