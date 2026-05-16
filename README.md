@@ -327,7 +327,24 @@ Vercel memberi URL HTTPS publik yang bisa dipakai untuk TradingView webhook:
 https://nama-project.vercel.app/webhook/tradingview
 ```
 
-Langkah singkat:
+Checklist sebelum deploy:
+
+1. Push project ke GitHub, GitLab, atau Bitbucket.
+2. Pastikan `.env` tidak ikut commit atau upload. File `.vercelignore` sudah mengecualikan `.env`, `.venv`, dan `signals.db`.
+3. Buat database Supabase untuk production, lalu isi `DATABASE_URL` di Vercel.
+4. Set environment variables di Vercel dari daftar di bawah.
+5. Deploy, lalu tes `https://nama-project.vercel.app/api/health`.
+
+Deploy dari dashboard Vercel:
+
+1. Buka Vercel.
+2. Pilih **Add New Project**.
+3. Import repository.
+4. Framework preset bisa dibiarkan otomatis.
+5. Tambahkan environment variables.
+6. Klik **Deploy**.
+
+Deploy dari CLI:
 
 ```bash
 npm i -g vercel
@@ -339,15 +356,17 @@ vercel --prod
 Set environment variables di dashboard Vercel:
 
 ```env
+APP_ENV=production
 DATA_PROVIDER=tradingview
 ENABLE_SCHEDULER=false
-ENABLE_AI_REASONING=true
-OPENAI_API_KEY=isi_api_key
+ENABLE_AI_REASONING=false
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.2
 OPENAI_BASE_URL=https://api.openai.com/v1
 TELEGRAM_BOT_TOKEN=isi_token_bot
 TELEGRAM_CHAT_ID=isi_chat_id
-TRADINGVIEW_WEBHOOK_SECRET=
+TRADINGVIEW_WEBHOOK_SECRET=secret-kamu
+DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
 ```
 
 Untuk riwayat sinyal permanen, gunakan Supabase Postgres.
@@ -378,6 +397,8 @@ supabase/schema.sql
 ```
 
 SQLite lokal `signals.db` cocok untuk development, tetapi tidak cocok untuk Vercel karena filesystem Vercel Functions bersifat read-only dan hanya `/tmp` yang writable sementara.
+
+Jika `DATABASE_URL` belum diisi saat berjalan di Vercel, aplikasi akan memakai SQLite sementara di `/tmp/signals.db` supaya smoke test bisa berjalan. Data tersebut tidak permanen, jadi tetap gunakan Supabase untuk production.
 
 ## 10. Batasan
 

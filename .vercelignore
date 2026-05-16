@@ -1,0 +1,8 @@
+.env
+.venv/
+.git/
+__pycache__/
+*.pyc
+signals.db
+.pytest_cache/
+.DS_Store
