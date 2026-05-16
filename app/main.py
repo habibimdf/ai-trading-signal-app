@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -80,14 +80,15 @@ def markets():
     }
 
 
-def create_signal_from_request(payload: AnalyzeRequest, db: Session) -> Signal:
-    if settings.data_provider.lower().strip() in TRADINGVIEW_PROVIDER_NAMES:
+def create_signal_from_request(payload: AnalyzeRequest, db: Session, provider_name: str | None = None) -> Signal:
+    selected_provider = (provider_name or settings.data_provider).lower().strip()
+    if selected_provider in TRADINGVIEW_PROVIDER_NAMES:
         raise HTTPException(
             status_code=400,
             detail="DATA_PROVIDER=tradingview memakai data dari POST /webhook/tradingview, bukan analisis lokal.",
         )
 
-    provider = get_provider(settings)
+    provider = get_provider(settings, selected_provider)
     pair = payload.pair.replace("/", "_").upper()
     if pair not in SUPPORTED_PAIRS:
         raise HTTPException(status_code=400, detail=f"Pair tidak didukung: {pair}")
@@ -115,6 +116,31 @@ def create_signal_from_request(payload: AnalyzeRequest, db: Session) -> Signal:
     db.commit()
     db.refresh(signal)
     return signal
+
+
+async def _send_configured_signal_alert(signal: Signal) -> dict[str, Any]:
+    text = format_signal_message(signal)
+    results: dict[str, Any] = {}
+    if settings.telegram_bot_token and settings.telegram_chat_id:
+        results["telegram"] = await send_telegram(settings, text)
+    if settings.whatsapp_access_token and settings.whatsapp_phone_number_id and settings.whatsapp_to_number:
+        results["whatsapp"] = await send_whatsapp_text(settings, text)
+    return results
+
+
+def _validate_cron_secret(authorization: str | None, token: str | None) -> None:
+    expected = settings.cron_secret.strip()
+    if not expected:
+        return
+
+    bearer = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        bearer = authorization[7:].strip()
+
+    if bearer == expected or str(token or "").strip() == expected:
+        return
+
+    raise HTTPException(status_code=401, detail="CRON_SECRET tidak valid.")
 
 
 @app.post("/api/analyze", response_model=SignalResponse)
@@ -184,6 +210,79 @@ def scan_now(db: Session = Depends(get_db)):
         )
         created.append(create_signal_from_request(payload, db))
     return created
+
+
+@app.get("/api/cron/scan")
+async def cron_scan(
+    token: str | None = Query(default=None),
+    send_wait: bool | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    _validate_cron_secret(authorization, token)
+    selected_provider = settings.cron_data_provider.lower().strip()
+    if selected_provider in TRADINGVIEW_PROVIDER_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail="Untuk mode tanpa TradingView alert, set CRON_DATA_PROVIDER=yahoo atau CRON_DATA_PROVIDER=demo.",
+        )
+
+    send_wait_alerts = settings.cron_send_wait_alerts if send_wait is None else send_wait
+    created: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+
+    for pair in settings.pairs_list():
+        pair = pair.replace("/", "_").upper()
+        if pair not in SUPPORTED_PAIRS:
+            errors.append({"pair": pair, "error": "Pair tidak didukung."})
+            continue
+
+        try:
+            payload = AnalyzeRequest(
+                pair=pair,
+                mode=settings.default_mode,
+                balance=settings.default_balance,
+                account_type=settings.default_account_type,
+                risk_percent=settings.default_risk_percent,
+            )
+            signal = create_signal_from_request(payload, db, provider_name=selected_provider)
+        except Exception as exc:
+            errors.append({"pair": pair, "error": str(exc)})
+            continue
+
+        alert_sent = False
+        alert_error = None
+        should_send = signal.signal in ["BUY", "SELL"] or send_wait_alerts
+        if should_send:
+            try:
+                await _send_configured_signal_alert(signal)
+                signal.status = "CRON_AUTO_SENT"
+                db.add(signal)
+                db.commit()
+                db.refresh(signal)
+                alert_sent = True
+            except Exception as exc:
+                alert_error = str(exc)
+
+        created.append(
+            {
+                "id": signal.id,
+                "pair": signal.pair,
+                "signal": signal.signal,
+                "status": signal.status,
+                "confidence": signal.confidence,
+                "alert_sent": alert_sent,
+                "alert_error": alert_error,
+            }
+        )
+
+    return {
+        "ok": not errors,
+        "provider": selected_provider,
+        "created": created,
+        "errors": errors,
+        "time": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _first_payload_value(raw: dict[str, Any], keys: list[str]) -> Any:

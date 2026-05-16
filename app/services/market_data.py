@@ -58,8 +58,17 @@ class YahooDataProvider(BaseMarketDataProvider):
         if raw.empty:
             raise MarketDataError(f"Yahoo tidak mengembalikan data untuk {symbol}.")
 
+        if isinstance(raw.columns, pd.MultiIndex):
+            if symbol in raw.columns.get_level_values(-1):
+                raw = raw.xs(symbol, axis=1, level=-1, drop_level=True)
+            elif symbol in raw.columns.get_level_values(0):
+                raw = raw.xs(symbol, axis=1, level=0, drop_level=True)
+            else:
+                raw.columns = raw.columns.get_level_values(0)
+
         raw = raw.reset_index()
         time_col = "Datetime" if "Datetime" in raw.columns else "Date"
+        volume = raw["Volume"] if "Volume" in raw.columns else pd.Series([0] * len(raw))
         df = pd.DataFrame(
             {
                 "time": pd.to_datetime(raw[time_col]),
@@ -67,7 +76,7 @@ class YahooDataProvider(BaseMarketDataProvider):
                 "high": raw["High"].astype(float),
                 "low": raw["Low"].astype(float),
                 "close": raw["Close"].astype(float),
-                "volume": raw.get("Volume", pd.Series([0] * len(raw))).fillna(0).astype(float),
+                "volume": volume.fillna(0).astype(float),
             }
         ).dropna()
 
@@ -127,8 +136,8 @@ class DemoDataProvider(BaseMarketDataProvider):
         return pd.DataFrame(rows).reset_index(drop=True)
 
 
-def get_provider(settings: Settings) -> BaseMarketDataProvider:
-    provider = settings.data_provider.lower().strip()
+def get_provider(settings: Settings, provider_name: str | None = None) -> BaseMarketDataProvider:
+    provider = (provider_name or settings.data_provider).lower().strip()
     if provider in ["tradingview", "webhook"]:
         raise MarketDataError("DATA_PROVIDER=tradingview menerima data hanya dari POST /webhook/tradingview.")
     if provider == "yahoo":

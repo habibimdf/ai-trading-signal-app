@@ -102,6 +102,111 @@ Untuk test otomatis yang lebih sering:
 4. Buat alert dengan condition `AI Trading Signal Webhook` -> `Any alert() function call`.
 5. Alert akan dikirim saat candle close, jadi pada chart `1m` tunggu sekitar 1 menit.
 
+### Alternatif jika TradingView Webhook tidak tersedia
+
+Jika akun TradingView Anda belum bisa memakai **Webhook URL**, gunakan jalur email:
+
+```text
+TradingView Email Alert -> Gmail -> Google Apps Script -> Vercel Webhook -> Telegram
+```
+
+File contoh Google Apps Script tersedia di:
+
+```text
+scripts/tradingview_email_forwarder.gs
+```
+
+Langkah setup:
+
+1. Buka https://script.google.com.
+2. Buat project baru.
+3. Copy isi `scripts/tradingview_email_forwarder.gs` ke editor Apps Script.
+4. Pastikan `WEBHOOK_URL` berisi URL production:
+
+```javascript
+const WEBHOOK_URL = "https://trading-signal-one.vercel.app/webhook/tradingview";
+```
+
+5. Jika `TRADINGVIEW_WEBHOOK_SECRET` di Vercel diisi, isi juga:
+
+```javascript
+const WEBHOOK_SECRET = "secret-yang-sama";
+```
+
+Jika secret Vercel kosong, biarkan:
+
+```javascript
+const WEBHOOK_SECRET = "";
+```
+
+6. Klik **Run** untuk fungsi `forwardTradingViewEmails`, lalu izinkan akses Gmail dan URL Fetch.
+7. Buka **Triggers** -> **Add Trigger**:
+   - Function: `forwardTradingViewEmails`
+   - Event source: `Time-driven`
+   - Type: `Minutes timer`
+   - Interval: `Every minute`
+8. Di TradingView Alert, aktifkan **Send email**. Webhook URL tidak perlu dipakai.
+9. Condition tetap pilih `AI Trading Signal Webhook` -> `Any alert() function call`.
+
+Script akan membaca email TradingView terbaru, mengambil JSON dari isi email, lalu mengirimkannya ke endpoint Vercel. Email yang sudah diproses disimpan di Script Properties supaya tidak terkirim dua kali.
+
+### Tanpa TradingView alert sama sekali
+
+Jika akun TradingView tidak bisa membuat alert karena perlu upgrade, pakai scanner server:
+
+```text
+Vercel Cron / cron-job.org -> GET /api/cron/scan -> Yahoo market data -> Telegram
+```
+
+Kode sudah menyediakan endpoint:
+
+```text
+GET https://trading-signal-one.vercel.app/api/cron/scan
+```
+
+`vercel.json` menjalankan endpoint ini 1x sehari agar kompatibel dengan akun Vercel Hobby:
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/scan",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
+```
+
+Environment variables untuk mode ini:
+
+```env
+DATA_PROVIDER=tradingview
+CRON_DATA_PROVIDER=yahoo
+CRON_SECRET=secret-bebas
+CRON_SEND_WAIT_ALERTS=false
+ACTIVE_PAIRS=XAU_USD,BTC_USDT
+DEFAULT_MODE=scalping
+TELEGRAM_BOT_TOKEN=isi_token_bot
+TELEGRAM_CHAT_ID=isi_chat_id
+```
+
+Catatan:
+
+- `DATA_PROVIDER=tradingview` boleh tetap dipakai agar endpoint webhook masih aktif.
+- `CRON_DATA_PROVIDER=yahoo` membuat scanner otomatis memakai data Yahoo.
+- Yahoo data gratis tidak selalu sama dengan chart broker/TradingView. Untuk `XAU_USD`, provider memakai `GC=F` gold futures sebagai pendekatan.
+- Secara default Telegram hanya dikirim jika sinyal `BUY` atau `SELL`. Untuk test, buka:
+
+```text
+https://trading-signal-one.vercel.app/api/cron/scan?token=secret-bebas&send_wait=true
+```
+
+Untuk scan lebih sering tanpa upgrade Vercel, gunakan https://cron-job.org atau GitHub Actions untuk memanggil URL ini tiap 5-15 menit:
+
+```text
+https://trading-signal-one.vercel.app/api/cron/scan?token=secret-bebas
+```
+
 Endpoint lokal:
 
 ```text

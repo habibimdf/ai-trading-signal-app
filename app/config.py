@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     data_provider: str = "tradingview"
     tradingview_webhook_secret: str = ""
+    cron_secret: str = ""
+    cron_data_provider: str = "yahoo"
+    cron_send_wait_alerts: bool = False
 
     enable_ai_reasoning: bool = False
     ai_provider: str = "gemini"

@@ -2,6 +2,8 @@ let lastSignalId = null;
 let selectedSignalId = null;
 let latestSeenSignalId = null;
 let currentChartKey = null;
+let chartRenderId = 0;
+let userChartOverride = false;
 let tradingViewScriptLoading = false;
 const LIVE_REFRESH_MS = 5000;
 const TRADINGVIEW_SCRIPT_URL = "https://s3.tradingview.com/tv.js";
@@ -111,6 +113,7 @@ async function renderTradingViewChart(sig = null) {
   const container = $("tradingviewChart");
   if (!container || key === currentChartKey) return;
 
+  const chartContainerId = `tradingviewChartWidget${++chartRenderId}`;
   currentChartKey = key;
   $("chartTitle").textContent = `${displayPair(sig?.pair || $("pair").value)} - ${symbol}`;
   $("chartMeta").textContent = `${mode.toUpperCase()} execution interval`;
@@ -118,7 +121,7 @@ async function renderTradingViewChart(sig = null) {
 
   try {
     await loadTradingViewScript();
-    container.innerHTML = "";
+    container.innerHTML = `<div id="${chartContainerId}" class="tradingview-chart"></div>`;
     new window.TradingView.widget({
       autosize: true,
       symbol,
@@ -133,14 +136,14 @@ async function renderTradingViewChart(sig = null) {
       details: true,
       calendar: false,
       support_host: "https://www.tradingview.com",
-      container_id: "tradingviewChart",
+      container_id: chartContainerId,
     });
   } catch (err) {
     container.innerHTML = `<div class="chart-loading">${err.message}</div>`;
   }
 }
 
-function generateWebhookTemplate() {
+function generateWebhookTemplate({ focusChart = true } = {}) {
   const mode = $("mode").value;
   const tf = modeTimeframes(mode);
   const payload = {
@@ -167,10 +170,13 @@ function generateWebhookTemplate() {
     note: "TradingView alert",
   };
   $("webhookTemplate").value = JSON.stringify(payload, null, 2);
-  renderTradingViewChart();
+  if (focusChart) {
+    userChartOverride = true;
+    renderTradingViewChart();
+  }
 }
 
-function renderSignal(sig) {
+function renderSignal(sig, { forceChart = false } = {}) {
   lastSignalId = sig.id;
   selectedSignalId = sig.id;
   $("sendBtn").disabled = false;
@@ -207,7 +213,12 @@ function renderSignal(sig) {
   ].join("\n");
   $("signalDetail").textContent = detail;
   $("lastUpdated").textContent = new Date(sig.created_at).toLocaleString();
-  renderTradingViewChart(sig);
+  if (forceChart) {
+    userChartOverride = false;
+  }
+  if (forceChart || !userChartOverride) {
+    renderTradingViewChart(sig);
+  }
 }
 
 function setLiveStatus(state, message) {
@@ -310,7 +321,7 @@ async function loadHistory({ auto = false } = {}) {
       <div>Mode: ${sig.mode} - Confidence: ${sig.confidence}%</div>
       <div>Status: ${sig.status}</div>
     `;
-    div.onclick = () => renderSignal(sig);
+    div.onclick = () => renderSignal(sig, { forceChart: true });
     history.appendChild(div);
   });
 
@@ -325,8 +336,8 @@ async function loadHistory({ auto = false } = {}) {
   const newest = data[0];
   const hasNewSignal = newest.id !== latestSeenSignalId;
   latestSeenSignalId = newest.id;
-  if (hasNewSignal || !selectedSignalId || selectedSignalId === lastSignalId) {
-    renderSignal(newest);
+  if (hasNewSignal || !selectedSignalId) {
+    renderSignal(newest, { forceChart: true });
   }
 }
 
@@ -344,7 +355,7 @@ $("clearHistoryBtn").addEventListener("click", clearHistory);
   $(id).addEventListener("change", generateWebhookTemplate);
 });
 
-generateWebhookTemplate();
+generateWebhookTemplate({ focusChart: false });
 renderTradingViewChart();
 loadHealth();
 startLiveUpdates();
