@@ -19,7 +19,6 @@ from .services.formatter import format_signal_message
 from .services.market_data import CandleRequest, SUPPORTED_PAIRS, get_provider
 from .services.notifier import NotificationError, send_telegram, send_whatsapp_text
 from .services.risk import calculate_lot_size
-from .services.signal_engine import generate_signal
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="1.0.0")
@@ -91,6 +90,8 @@ def create_signal_from_request(payload: AnalyzeRequest, db: Session) -> Signal:
         raise HTTPException(status_code=400, detail=f"Pair tidak didukung: {pair}")
 
     try:
+        from .services.signal_engine import generate_signal
+
         h4 = provider.get_candles(CandleRequest(pair=pair, timeframe="H4", count=320))
         h1 = provider.get_candles(CandleRequest(pair=pair, timeframe="H1", count=420))
         decision = generate_signal(

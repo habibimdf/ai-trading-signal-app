@@ -5,9 +5,6 @@ from datetime import datetime, timedelta, timezone
 import math
 import random
 
-import numpy as np
-import pandas as pd
-
 from app.config import Settings
 
 
@@ -35,12 +32,17 @@ class MarketDataError(RuntimeError):
 
 
 class BaseMarketDataProvider:
-    def get_candles(self, request: CandleRequest) -> pd.DataFrame:
+    def get_candles(self, request: CandleRequest):
         raise NotImplementedError
 
 
 class YahooDataProvider(BaseMarketDataProvider):
-    def get_candles(self, request: CandleRequest) -> pd.DataFrame:
+    def get_candles(self, request: CandleRequest):
+        try:
+            import pandas as pd
+        except Exception as exc:  # pragma: no cover
+            raise MarketDataError("Package pandas belum tersedia.") from exc
+
         try:
             import yfinance as yf
         except Exception as exc:  # pragma: no cover
@@ -80,7 +82,12 @@ class YahooDataProvider(BaseMarketDataProvider):
 class DemoDataProvider(BaseMarketDataProvider):
     """Deterministic dummy candles so the dashboard can be tested without API keys."""
 
-    def get_candles(self, request: CandleRequest) -> pd.DataFrame:
+    def get_candles(self, request: CandleRequest):
+        try:
+            import pandas as pd
+        except Exception as exc:  # pragma: no cover
+            raise MarketDataError("Package pandas belum tersedia.") from exc
+
         pair = request.pair.replace("/", "_").upper()
         seed = sum(ord(c) for c in pair + request.timeframe)
         rng = random.Random(seed)
